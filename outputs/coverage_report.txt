@@ -1,6 +1,6 @@
 Total addresses: 49999
 Seed addresses: 39999
 Validation addresses: 10000
-Clusters: 1635
-Patterns: 1635
-Coverage: 97.14%
+Clusters: 1651
+Patterns: 1651
+Coverage: 97.37%
