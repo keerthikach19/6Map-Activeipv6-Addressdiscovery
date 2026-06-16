@@ -104,8 +104,12 @@ class FuzzyPID:
         e_ranges = [-10, -5, -2, 0, 2, 5, 10]
         ec_ranges = [-5, -2, -1, 0, 1, 2, 5]
         
-        e_mem = self._membership(error, e_ranges)
-        ec_mem = self._membership(delta_error, ec_ranges)
+        # Clip inputs to range boundaries for membership calculation to ensure gains continue tuning
+        error_clipped = max(e_ranges[0], min(e_ranges[-1], error))
+        delta_error_clipped = max(ec_ranges[0], min(ec_ranges[-1], delta_error))
+        
+        e_mem = self._membership(error_clipped, e_ranges)
+        ec_mem = self._membership(delta_error_clipped, ec_ranges)
         
         # Compute delta gains
         dkp = self._defuzzify(e_mem, ec_mem, self.rule_base_kp) * 0.1
