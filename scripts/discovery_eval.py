@@ -1,13 +1,21 @@
 # =============================================================================
 # discovery_eval.py
 # =============================================================================
-# Runs the full Phase B discovery evaluation:
+# Runs the full Phase B discovery evaluation.
 #
 #   For each scale configuration (e.g. 50, 100, 500 hosts):
 #     1. Create a virtual network with active + inactive hosts
-#     2. Probe all addresses from inside the network (h1 as prober)
-#     3. Compare discovered set against ground truth
-#     4. Record: hit rate, false positives, false negatives, probe count
+#     2. Verify network is ready before probing (NEW — prevents 1.2% bug)
+#     3. Probe all addresses from inside the network (h1 as prober)
+#     4. Compare discovered set against ground truth
+#     5. Record: hit rate, false positives, false negatives, probe count
+#
+# ROOT CAUSE OF THE 100-HOST 1.2% BUG:
+#   The original code started probing immediately after create_network()
+#   returned, but at 100 hosts the network was not yet fully configured.
+#   Hosts were still running their ip -6 addr add / ip -6 route replace
+#   commands when the first pings arrived, so they silently dropped them.
+#   Fix: added a readiness check with automatic retry before probing.
 #
 # USAGE:
 #   sudo python3 scripts/discovery_eval.py
@@ -23,7 +31,7 @@ import argparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from topology import create_network
-from probing  import probe_all_from_host
+from probing  import probe_all_from_host, pre_probe_check
 from mininet.log import setLogLevel
 
 
@@ -31,15 +39,15 @@ from mininet.log import setLogLevel
 # SINGLE SCALE EXPERIMENT
 # =============================================================================
 
-def run_experiment(num_hosts, active_ratio=0.8, timeout=2, rate_limit=0.05):
+def run_experiment(num_hosts, active_ratio=0.8, timeout=4, rate_limit=0.05):
     """
     Run one complete discovery experiment at a given scale.
 
     Args:
         num_hosts:    total virtual hosts to create
         active_ratio: fraction that are active (have IPv6 + respond)
-        timeout:      seconds to wait per probe
-        rate_limit:   seconds between probes (controls probe rate)
+        timeout:      seconds to wait per probe  (FIX: default raised to 4)
+        rate_limit:   seconds between probes
 
     Returns:
         dict with all result metrics
@@ -56,22 +64,12 @@ def run_experiment(num_hosts, active_ratio=0.8, timeout=2, rate_limit=0.05):
     )
 
     try:
-        # ----------------------------------------------------------------
-        # Build probe target list:
-        # active + inactive addresses — prober doesn't know which is which.
-        #
-        # IMPORTANT: exclude the prober's own address (h1 = hosts[0]).
-        # A host pinging itself either responds trivially (loopback) or
-        # behaves unexpectedly. Either way it skews results — exclude it
-        # and count it as a known-active discovery automatically.
-        # ----------------------------------------------------------------
         prober      = hosts[0]
         prober_addr = prober.ipv6
 
         all_targets = [a for a in active_addrs + inactive_addrs
                        if a != prober_addr]
 
-        # Prober is itself active — credit it without probing
         prober_is_active = prober_addr in active_addrs
 
         print(f"\nProbe targets  : {len(all_targets)}  (prober self-excluded)")
@@ -79,6 +77,32 @@ def run_experiment(num_hosts, active_ratio=0.8, timeout=2, rate_limit=0.05):
               f"(including prober: {prober_addr})")
         print(f"  Known silent : {len(inactive_addrs)}")
         print(f"  Probing from : {prober.name} ({prober_addr})\n")
+
+        # ----------------------------------------------------------------
+        # FIX: Readiness guard — verify network is actually ready before
+        # starting the mass probe.  At 100 hosts the original code began
+        # probing while hosts were still being configured, giving 1.2%.
+        #
+        # We ping a few known-active addresses (excluding prober itself).
+        # If they don't respond, we wait up to 3 × 10s and retry.
+        # ----------------------------------------------------------------
+        known_active_targets = [a for a in active_addrs if a != prober_addr]
+        sample = known_active_targets[:5]   # test up to 5 addresses
+
+        ready = False
+        for attempt in range(1, 4):         # up to 3 attempts
+            ready = pre_probe_check(prober, sample, timeout=timeout)
+            if ready:
+                break
+            wait = 10 * attempt
+            print(f"Network not ready (attempt {attempt}/3). "
+                  f"Waiting {wait}s before retry...")
+            time.sleep(wait)
+
+        if not ready:
+            print("WARNING: Network readiness check failed after 3 attempts.")
+            print("         Proceeding anyway — results may be lower than expected.")
+        # ----------------------------------------------------------------
 
         start_time = time.time()
 
@@ -102,9 +126,9 @@ def run_experiment(num_hosts, active_ratio=0.8, timeout=2, rate_limit=0.05):
         active_set     = set(active_addrs)
         inactive_set   = set(inactive_addrs)
 
-        true_positives  = discovered_set & active_set      # found + really active
-        false_positives = discovered_set & inactive_set    # found + actually silent
-        false_negatives = active_set - discovered_set      # missed active hosts
+        true_positives  = discovered_set & active_set
+        false_positives = discovered_set & inactive_set
+        false_negatives = active_set - discovered_set
 
         hit_rate  = len(true_positives)  / len(active_set)     if active_set     else 0.0
         fp_rate   = len(false_positives) / len(inactive_set)   if inactive_set   else 0.0
@@ -232,8 +256,8 @@ if __name__ == "__main__":
         help="Fraction of hosts that are active (default 0.8)"
     )
     parser.add_argument(
-        "--timeout", type=float, default=2.0,
-        help="Probe timeout in seconds (default 2)"
+        "--timeout", type=float, default=4.0,   # FIX: was 2.0
+        help="Probe timeout in seconds (default 4)"
     )
     parser.add_argument(
         "--rate", type=float, default=0.05,
@@ -263,8 +287,8 @@ if __name__ == "__main__":
         all_results.append(result)
 
         if scale != args.scales[-1]:
-            print("\nPausing 3s before next experiment...")
-            time.sleep(3)
+            print("\nPausing 5s before next experiment...")
+            time.sleep(5)
 
     print_summary_table(all_results)
     print_random_baseline_comparison(all_results)

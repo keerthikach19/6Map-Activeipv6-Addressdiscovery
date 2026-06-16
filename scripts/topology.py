@@ -17,14 +17,12 @@
 #   - A static route: "to reach 2001:db8:1::/64, use my interface"
 # This means ping6 resolves destinations via the route table, not NDP.
 # No multicast needed. No MAC resolution needed.
-# This is valid because all hosts are on the same /64 — direct delivery.
 #
-# WHY THIS IS NOT CHEATING:
-# We are not pre-loading MAC addresses. The prober still does not know
-# which addresses are active. It probes the full address range and
-# discovers active hosts purely by whether ping6 gets a reply.
-# The routing fix just makes the virtual network infrastructure work
-# correctly — equivalent to how a real IPv6 LAN works with RA/SLAAC.
+# SCALE FIX (why 100 hosts failed at 1.2% hit rate):
+# The original startup_delay = 1 + (num_hosts // 50) gave only 3s for
+# 100 hosts. That is not enough time for all hosts to finish configuring
+# their IPv6 addresses and static routes before probing begins.
+# Fix: use a larger, scale-aware delay formula + a readiness check.
 # =============================================================================
 
 import sys
@@ -75,8 +73,14 @@ def create_network(num_hosts=10, active_ratio=1.0, enable_cli=False):
     info("\n*** Starting network\n")
     net.start()
 
-    # Scale-aware startup delay
-    startup_delay = 1 + (num_hosts // 50)
+    # ---------------------------------------------------------------
+    # FIX 1: Scale-aware startup delay.
+    # Old formula: 1 + (num_hosts // 50)  → 3s at 100 hosts (too short)
+    # New formula: 2 + (num_hosts // 20)  → 7s at 100 hosts
+    #              scales to 12s at 200 hosts, 22s at 400 hosts
+    # ---------------------------------------------------------------
+    startup_delay = 2 + (num_hosts // 20)
+    info(f"*** Waiting {startup_delay}s for network to stabilise\n")
     time.sleep(startup_delay)
 
     # Determine active vs inactive split
@@ -91,8 +95,8 @@ def create_network(num_hosts=10, active_ratio=1.0, enable_cli=False):
     # Configure ACTIVE hosts
     # Each active host gets:
     #   1. IPv6 address assigned
-    #   2. A static /64 route so it can reach other hosts WITHOUT NDP
-    #      (OVSBridge doesn't handle IPv6 multicast reliably at scale)
+    #   2. DAD disabled  (saves ~1s per host at startup)
+    #   3. A static /64 route so it can reach other hosts WITHOUT NDP
     # ------------------------------------------------------------------
     info("\n*** Configuring active hosts\n")
 
@@ -104,18 +108,15 @@ def create_network(num_hosts=10, active_ratio=1.0, enable_cli=False):
         # Bring interface up
         host.cmd(f"ip link set {iface} up")
 
-        # Assign IPv6 address
-        host.cmd(f"ip -6 addr add {ipv6_cidr} dev {iface}")
-
-        # Disable DAD (Duplicate Address Detection) — wastes 1s per address
+        # Disable DAD before assigning address — avoids 1s DAD wait
         host.cmd(f"sysctl -w net.ipv6.conf.{iface}.dad_transmits=0 > /dev/null 2>&1")
         host.cmd(f"sysctl -w net.ipv6.conf.{iface}.accept_dad=0   > /dev/null 2>&1")
 
-        # KEY FIX: disable NDP (Neighbor Discovery) for the subnet and
-        # add a static route so the host reaches the /64 directly.
-        # This tells the kernel: "send packets to 2001:db8:1::/64
-        # directly out of this interface" without needing to resolve
-        # each destination via multicast NDP.
+        # Assign IPv6 address
+        host.cmd(f"ip -6 addr add {ipv6_cidr} dev {iface}")
+
+        # Static route: reach the whole /64 directly via this interface.
+        # This eliminates the need for NDP multicast resolution entirely.
         host.cmd(
             f"ip -6 route replace {IPV6_PREFIX}::/{PREFIX_LEN} "
             f"dev {iface} metric 1 > /dev/null 2>&1"
@@ -129,8 +130,8 @@ def create_network(num_hosts=10, active_ratio=1.0, enable_cli=False):
         active_addrs.append(ipv6_addr)
 
     # ------------------------------------------------------------------
-    # Configure INACTIVE hosts — interface up but NO IPv6 address
-    # They exist on the network but nothing listens at their address slot
+    # Configure INACTIVE hosts — interface up but NO IPv6 address.
+    # They exist on the network but nothing listens at their address slot.
     # ------------------------------------------------------------------
     info(f"*** {len(inactive_hosts)} hosts left inactive\n")
 
@@ -143,14 +144,29 @@ def create_network(num_hosts=10, active_ratio=1.0, enable_cli=False):
         host.is_active = False
         inactive_addrs.append(planned_addr)
 
-    time.sleep(1)
+    # ---------------------------------------------------------------
+    # FIX 2: Post-configuration settling delay.
+    # Gives the kernel time to finish processing all the ip commands
+    # before any probing starts. Scales with host count.
+    # Old code used a fixed time.sleep(1) which is too short at scale.
+    # ---------------------------------------------------------------
+    settle_delay = max(3, num_hosts // 25)
+    info(f"*** Waiting {settle_delay}s for address configuration to settle\n")
+    time.sleep(settle_delay)
 
     # ------------------------------------------------------------------
-    # Verify connectivity between two active hosts
+    # Verify connectivity between two active hosts.
+    # FIX 3: if the first check fails, wait longer and retry once.
+    # This catches cases where the network is almost-but-not-quite ready.
     # ------------------------------------------------------------------
     if len(active_hosts) >= 2:
         info("\n*** Verifying IPv6 connectivity\n")
-        _verify_connectivity(active_hosts[0], active_hosts[1])
+        ready = _verify_connectivity(active_hosts[0], active_hosts[1])
+
+        if not ready:
+            info("*** First check failed — waiting 10 more seconds and retrying\n")
+            time.sleep(10)
+            _verify_connectivity(active_hosts[0], active_hosts[1])
 
     info("\n*** Network is ready\n")
     _print_network_info(active_addrs, inactive_addrs)
@@ -172,12 +188,23 @@ def get_inactive_addresses(hosts):
 
 
 def _verify_connectivity(h1, h2):
-    result = h1.cmd(f"ping6 -c 2 -W 2 {h2.ipv6}")
-    if "1 received" in result or "2 received" in result or "1 packets received" in result:
+    """
+    Ping from h1 to h2. Returns True if successful, False otherwise.
+    Uses 3 packets and 3s timeout to be more reliable at scale.
+    """
+    result = h1.cmd(f"ping6 -c 3 -W 3 {h2.ipv6}")
+    success = (
+        "1 received" in result or
+        "2 received" in result or
+        "3 received" in result or
+        "1 packets received" in result
+    )
+    if success:
         info(f"  ✓ {h1.name} → {h2.name} OK\n")
     else:
         info(f"  ✗ WARNING: ping6 failed between {h1.name} and {h2.name}\n")
         info(f"    Output: {result[:200]}\n")
+    return success
 
 
 def _print_network_info(active_addrs, inactive_addrs):
