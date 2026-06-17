@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>6Map — IPv6 Active Discovery Demo</title>
+<style>
+  :root {
+    --bg:        #0a0e17;
+    --surface:   #111827;
+    --border:    #1e2d45;
+    --accent:    #00d4ff;
+    --accent2:   #7c3aed;
+    --green:     #22c55e;
+    --red:       #ef4444;
+    --yellow:    #f59e0b;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --mono:      'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    --sans:      'Inter', system-ui, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── HEADER ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo-mark {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 500; font-size: 13px;
+    color: #fff; flex-shrink: 0;
+  }
+  header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+  header p  { font-size: 13px; color: var(--muted); margin-left: auto; }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    padding: 0 32px;
+    gap: 0;
+  }
+  .tab {
+    padding: 12px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    user-select: none;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── MAIN LAYOUT ── */
+  .main { padding: 28px 32px; max-width: 1280px; margin: 0 auto; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  /* ── GRID LAYOUTS ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+  /* ── STAT BOXES ── */
+  .stat-val {
+    font-family: var(--mono);
+    font-size: 32px;
+    font-weight: 500;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .stat-label {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  /* ── CONTROLS ── */
+  .controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 9px 20px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--sans);
+    transition: all 0.15s;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover { background: #00b8e6; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  select, input[type=range] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: var(--sans);
+    outline: none;
+  }
+  select:focus { border-color: var(--accent); }
+
+  .range-wrap { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+  input[type=range] { padding: 0; width: 120px; accent-color: var(--accent); }
+
+  /* ── TERMINAL LOG ── */
+  .terminal {
+    background: #060a12;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    height: 260px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+  }
+  .terminal::-webkit-scrollbar { width: 4px; }
+  .terminal::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .log-ts    { color: #374151; }
+  .log-info  { color: var(--accent); }
+  .log-ok    { color: var(--green); }
+  .log-warn  { color: var(--yellow); }
+  .log-pid   { color: var(--accent2); }
+  .log-err   { color: var(--red); }
+  .log-dim   { color: var(--muted); }
+
+  /* ── HOST GRID ── */
+  .host-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+    gap: 5px;
+    margin-top: 12px;
+  }
+  .host-dot {
+    width: 38px; height: 38px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #111;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 9px; color: var(--muted);
+    transition: all 0.3s;
+    cursor: default;
+    position: relative;
+  }
+  .host-dot.scanning {
+    border-color: var(--yellow);
+    background: rgba(245,158,11,0.1);
+    animation: pulse-scan 0.8s infinite;
+  }
+  .host-dot.active {
+    border-color: var(--green);
+    background: rgba(34,197,94,0.15);
+    color: var(--green);
+  }
+  .host-dot.inactive {
+    border-color: #1a1a2e;
+    background: #0d0d1a;
+    color: #1e2d45;
+  }
+  .host-dot.prober {
+    border-color: var(--accent);
+    background: rgba(0,212,255,0.15);
+    color: var(--accent);
+  }
+  @keyframes pulse-scan {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.4); }
+    50%       { box-shadow: 0 0 0 4px rgba(245,158,11,0); }
+  }
+
+  /* ── PROGRESS BAR ── */
+  .progress-wrap {
+    background: var(--bg);
+    border-radius: 4px;
+    height: 6px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 4px;
+    transition: width 0.3s;
+    width: 0%;
+  }
+
+  /* ── PHASE A PIPELINE ── */
+  .pipeline {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 20px 0;
+  }
+  .pipe-step {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 12px;
+    text-align: center;
+    position: relative;
+    transition: all 0.3s;
+  }
+  .pipe-step.done {
+    border-color: var(--green);
+    background: rgba(34,197,94,0.05);
+  }
+  .pipe-step.running {
+    border-color: var(--accent);
+    background: rgba(0,212,255,0.05);
+    box-shadow: 0 0 12px rgba(0,212,255,0.1);
+  }
+  .pipe-arrow {
+    display: flex; align-items: center;
+    padding: 0 6px;
+    color: var(--muted);
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .pipe-icon { font-size: 22px; margin-bottom: 6px; }
+  .pipe-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .pipe-val { font-family: var(--mono); font-size: 12px; color: var(--accent); margin-top: 4px; min-height: 16px; }
+
+  /* ── CLUSTER VIZ ── */
+  .cluster-strip {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .cluster-pill {
+    height: 20px;
+    border-radius: 3px;
+    background: var(--accent2);
+    opacity: 0.7;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .cluster-pill:hover { opacity: 1; transform: scaleY(1.3); }
+
+  /* ── PID CHART ── */
+  canvas#pidChart {
+    width: 100%; height: 140px;
+    display: block;
+  }
+
+  /* ── METRICS TABLE ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; padding: 8px 12px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+    text-transform: uppercase; color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #111827;
+    font-family: var(--mono); font-size: 12px;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(0,212,255,0.03); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge-red   { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge-blue  { background: rgba(0,212,255,0.15); color: var(--accent); }
+
+  /* ── STATUS INDICATOR ── */
+  .status-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .status-dot.green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.yellow { background: var(--yellow); animation: pulse-scan 1s infinite; }
+  .status-dot.gray   { background: var(--muted); }
+
+  /* ── TOOLTIP ── */
+  .tooltip-wrap { position: relative; }
+  .tooltip-wrap .tooltip-text {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e2d45;
+    border: 1px solid var(--border);
+    padding: 5px 9px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-family: var(--mono);
+    white-space: nowrap;
+    z-index: 99;
+    pointer-events: none;
+  }
+  .tooltip-wrap:hover .tooltip-text { display: block; }
+
+  /* ── OVERVIEW HERO ── */
+  .hero {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    background: linear-gradient(135deg, #0d1520 0%, #111827 100%);
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(0,212,255,0.06) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  .hero h2 {
+    font-size: 26px; font-weight: 600; letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+  .hero h2 span { color: var(--accent); }
+  .hero p { font-size: 14px; color: var(--muted); max-width: 560px; line-height: 1.6; }
+  .hero-stats {
+    display: flex; gap: 32px; margin-top: 24px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .hero-stat-val { font-family: var(--mono); font-size: 24px; font-weight: 500; color: var(--text); }
+  .hero-stat-lab { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .mb-16 { margin-bottom: 16px; }
+  .mb-20 { margin-bottom: 20px; }
+  .gap-12 { gap: 12px; }
+
+  /* Scrollbar global */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .main { padding: 16px; }
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr 1fr; }
+    .pipeline { flex-direction: column; gap: 8px; }
+    .pipe-arrow { transform: rotate(90deg); align-self: center; }
+    header { padding: 14px 16px; }
+    .tabs { padding: 0 16px; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">6M</div>
+  <h1>6Map — Active IPv6 Discovery</h1>
+  <p>IEEE INFOCOM 2025 · Simulation Demo</p>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview')">Overview</div>
+  <div class="tab" onclick="switchTab('phaseA')">Phase A — Clustering</div>
+  <div class="tab" onclick="switchTab('phaseB')">Phase B — Discovery</div>
+  <div class="tab" onclick="switchTab('p4')">P4 + FuzzyPID</div>
+  <div class="tab" onclick="switchTab('results')">Results</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  OVERVIEW TAB                                             -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="main">
+<div id="tab-overview" class="panel active">
+  <div class="hero">
+    <h2>Discovering <span>Active IPv6 Hosts</span> at Scale</h2>
+    <p>
+      With 2<sup>128</sup> possible addresses, random scanning IPv6 is impossible.
+      6Map learns structural patterns from known addresses, then probes only the
+      likely targets — discovering active hosts orders of magnitude faster.
+    </p>
+    <div class="hero-stats">
+      <div>
+        <div class="hero-stat-val">50,000</div>
+        <div class="hero-stat-lab">Real IPv6 addresses</div>
+      </div>
+      <div>
+        <div class="hero-stat-val">97.37%</div>
+        <div class="hero-stat-lab">Validation coverage</div>
+      </div>
+      <div>
+        <div class="hero-stat-val">1,651</div>
+        <div class="hero-stat-lab">Discovered patterns</div>
+      </div>
+      <div>
+        <div class="hero-stat-val">100%</div>
+        <div class="hero-stat-lab">Hit rate (50 hosts)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2 mb-20">
+    <div class="card">
+      <div class="card-title">Pipeline Architecture</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:32px;height:32px;border-radius:6px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">📥</div>
+          <div>
+            <div style="font-size:13px;font-weight:500;">Load IPv6 Dataset</div>
+            <div style="font-size:12px;color:var(--muted);">50k real addresses from IPv6 hitlist</div>
+          </div>
+        </div>
+        <div style="margin-left:15px;height:14px;border-left:1px dashed var(--border);"></div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:32px;height:32px;border-radius:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🔗</div>
+          <div>
+            <div style="font-size:13px;font-weight:500;">Cluster by Prefix</div>
+            <div style="font-size:12px;color:var(--muted);">Group by first 3 hextets → 1,651 clusters</div>
+          </div>
+        </div>
+        <div style="margin-left:15px;height:14px;border-left:1px dashed var(--border);"></div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:32px;height:32px;border-radius:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🎯</div>
+          <div>
+            <div style="font-size:13px;font-weight:500;">Generate Wildcard Patterns</div>
+            <div style="font-size:12px;color:var(--muted);">e.g. 2001:1248:447f:*:*:*:*:*</div>
+          </div>
+        </div>
+        <div style="margin-left:15px;height:14px;border-left:1px dashed var(--border);"></div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:32px;height:32px;border-radius:6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">📡</div>
+          <div>
+            <div style="font-size:13px;font-weight:500;">Probe via P4 Switch</div>
+            <div style="font-size:12px;color:var(--muted);">ICMPv6 pings rate-controlled by FuzzyPID</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">System Stack</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg);border-radius:6px;">
+          <span style="font-size:13px;">Mininet</span>
+          <span class="badge badge-green">Network Emulation</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg);border-radius:6px;">
+          <span style="font-size:13px;">BMv2 simple_switch</span>
+          <span class="badge badge-blue">P4 Software Switch</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg);border-radius:6px;">
+          <span style="font-size:13px;">p4c compiler</span>
+          <span class="badge badge-blue">P4→BMv2 JSON</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg);border-radius:6px;">
+          <span style="font-size:13px;">FuzzyPID Controller</span>
+          <span class="badge badge-green">Rate Adaptation</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg);border-radius:6px;">
+          <span style="font-size:13px;">Python 3 scripts</span>
+          <span class="badge badge-blue">Clustering + Evaluation</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">IPv6 Address Space Challenge</div>
+    <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;margin-top:4px;">
+      <div style="flex:1;min-width:200px;">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">Total IPv6 address space</div>
+        <div style="font-family:var(--mono);font-size:15px;color:var(--accent);">2<sup>128</sup> ≈ 3.4 × 10<sup>38</sup></div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Scanning at 1M pps → 10<sup>25</sup> years</div>
+      </div>
+      <div style="flex:1;min-width:200px;">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">6Map approach</div>
+        <div style="font-family:var(--mono);font-size:15px;color:var(--green);">Cluster → Target → Probe</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">97.37% coverage with only 1,651 patterns</div>
+      </div>
+      <div style="flex:1;min-width:200px;">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">Address clustering insight</div>
+        <div style="font-family:var(--mono);font-size:15px;color:var(--yellow);">ISPs allocate in blocks</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">First 3 hextets identify a network region</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  PHASE A TAB                                              -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div id="tab-phaseA" class="panel">
+  <div class="controls">
+    <select id="nPrefix">
+      <option value="3" selected>n_prefix = 3 (real dataset)</option>
+      <option value="4">n_prefix = 4 (Mininet dataset)</option>
+    </select>
+    <button class="btn btn-primary" id="btnRunA" onclick="runPhaseA()">▶ Run Phase A</button>
+    <button class="btn btn-ghost" onclick="resetPhaseA()">↺ Reset</button>
+    <span style="font-size:12px;color:var(--muted);margin-left:auto;">
+      <span class="status-dot gray" id="dotA"></span>
+      <span id="statusA">Ready</span>
+    </span>
+  </div>
+
+  <div class="pipeline mb-20" id="pipelineA">
+    <div class="pipe-step" id="pipe0">
+      <div class="pipe-icon">📂</div>
+      <div class="pipe-label">Load Dataset</div>
+      <div class="pipe-val" id="pv0">—</div>
+    </div>
+    <div class="pipe-arrow">›</div>
+    <div class="pipe-step" id="pipe1">
+      <div class="pipe-icon">✂️</div>
+      <div class="pipe-label">Split</div>
+      <div class="pipe-val" id="pv1">—</div>
+    </div>
+    <div class="pipe-arrow">›</div>
+    <div class="pipe-step" id="pipe2">
+      <div class="pipe-icon">🔗</div>
+      <div class="pipe-label">Cluster</div>
+      <div class="pipe-val" id="pv2">—</div>
+    </div>
+    <div class="pipe-arrow">›</div>
+    <div class="pipe-step" id="pipe3">
+      <div class="pipe-icon">🎯</div>
+      <div class="pipe-label">Patterns</div>
+      <div class="pipe-val" id="pv3">—</div>
+    </div>
+    <div class="pipe-arrow">›</div>
+    <div class="pipe-step" id="pipe4">
+      <div class="pipe-icon">✅</div>
+      <div class="pipe-label">Coverage</div>
+      <div class="pipe-val" id="pv4">—</div>
+    </div>
+  </div>
+
+  <div class="grid-2 mb-16">
+    <div class="card">
+      <div class="card-title">Terminal Output</div>
+      <div class="terminal" id="termA">
+        <span class="log-dim">$ python3 scripts/main.py</span><br>
+        <span class="log-dim">Waiting to run...</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Cluster Size Distribution</div>
+      <div style="margin-top:4px;">
+        <div id="clusterViz" style="min-height:80px;">
+          <span style="font-size:12px;color:var(--muted);">Run Phase A to see cluster visualization</span>
+        </div>
+        <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;" id="clusterStats">
+          <div><div class="stat-val" id="cs-total" style="font-size:22px;">—</div><div class="stat-label">Total clusters</div></div>
+          <div><div class="stat-val" id="cs-largest" style="font-size:22px;">—</div><div class="stat-label">Largest cluster</div></div>
+          <div><div class="stat-val" id="cs-avg" style="font-size:22px;">—</div><div class="stat-label">Avg cluster size</div></div>
+          <div><div class="stat-val" id="cs-cov" style="font-size:22px;">—</div><div class="stat-label">Coverage</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Sample Patterns Generated</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;" id="patternSamples">
+      <span style="font-size:12px;color:var(--muted);">Patterns will appear here after run</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  PHASE B TAB                                              -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div id="tab-phaseB" class="panel">
+  <div class="controls">
+    <div class="range-wrap">
+      <span>Hosts:</span>
+      <input type="range" id="hostCount" min="10" max="100" step="10" value="50" oninput="document.getElementById('hostVal').textContent=this.value">
+      <span id="hostVal">50</span>
+    </div>
+    <div class="range-wrap">
+      <span>Active ratio:</span>
+      <input type="range" id="activeRatio" min="0.3" max="1.0" step="0.1" value="0.7" oninput="document.getElementById('ratioVal').textContent=(+this.value*100).toFixed(0)+'%'">
+      <span id="ratioVal">70%</span>
+    </div>
+    <button class="btn btn-primary" id="btnRunB" onclick="runPhaseB()">▶ Run Discovery</button>
+    <button class="btn btn-ghost" onclick="resetPhaseB()">↺ Reset</button>
+    <span style="font-size:12px;color:var(--muted);margin-left:auto;">
+      <span class="status-dot gray" id="dotB"></span>
+      <span id="statusB">Ready</span>
+    </span>
+  </div>
+
+  <div class="grid-2 mb-16">
+    <div class="card">
+      <div class="card-title">Host Network — <span id="hostGridLabel">Configure and run</span></div>
+      <div class="host-grid" id="hostGrid"></div>
+      <div style="display:flex;gap:16px;margin-top:12px;font-size:11px;color:var(--muted);">
+        <span><span style="color:var(--accent)">■</span> Prober (h1)</span>
+        <span><span style="color:var(--green)">■</span> Active host</span>
+        <span><span style="color:#1e2d45">■</span> Inactive</span>
+        <span><span style="color:var(--yellow)">■</span> Scanning</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Discovery Terminal</div>
+      <div class="terminal" id="termB">
+        <span class="log-dim">$ python3 scripts/evaluate_6map.py --hosts 50</span><br>
+        <span class="log-dim">Waiting to run...</span>
+      </div>
+      <div class="progress-wrap" style="margin-top:10px;">
+        <div class="progress-bar" id="progressB"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--muted);">
+        <span id="progLabel">0 / 0 probed</span>
+        <span id="timeLabel">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-4">
+    <div class="card">
+      <div class="card-title">Discovered</div>
+      <div class="stat-val" id="bFound">—</div>
+      <div class="stat-label">Active hosts found</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Hit Rate</div>
+      <div class="stat-val" id="bHit">—</div>
+      <div class="stat-label">True positive rate</div>
+    </div>
+    <div class="card">
+      <div class="card-title">False Positives</div>
+      <div class="stat-val" id="bFP" style="color:var(--yellow)">—</div>
+      <div class="stat-label">Incorrect detections</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Elapsed</div>
+      <div class="stat-val" id="bTime" style="color:var(--muted)">—</div>
+      <div class="stat-label">Seconds to complete</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  P4 + FUZZYPID TAB                                        -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div id="tab-p4" class="panel">
+  <div class="grid-2 mb-16">
+    <div class="card">
+      <div class="card-title">P4 Switch Pipeline (6map_switch.p4)</div>
+      <div style="display:flex;flex-direction:column;gap:0;margin-top:4px;">
+        <div style="padding:10px 12px;border-radius:6px 6px 0 0;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);font-size:12px;font-family:var(--mono);">
+          <span style="color:var(--accent)">MyParser</span>
+          <span style="color:var(--muted);float:right">ethernet → ipv6 → icmpv6</span>
+        </div>
+        <div style="padding:10px 12px;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-top:none;font-size:12px;font-family:var(--mono);">
+          <span style="color:var(--accent2)">MyIngress</span>
+          <span style="color:var(--muted);float:right">meter + mac_forward</span>
+        </div>
+        <div style="padding:10px 12px;background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.2);border-top:none;font-size:12px;font-family:var(--mono);">
+          <span style="color:var(--green)">probe_meter</span>
+          <span style="color:var(--muted);float:right">ICMPv6 type=128 rate limit</span>
+        </div>
+        <div style="padding:10px 12px;border-radius:0 0 6px 6px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.15);border-top:none;font-size:12px;font-family:var(--mono);">
+          <span style="color:var(--accent)">MyDeparser</span>
+          <span style="color:var(--muted);float:right">emit eth + ipv6 + icmpv6</span>
+        </div>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--bg);border-radius:6px;font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.8;">
+        <div><span style="color:var(--accent2)">if</span> (ingress_port == <span style="color:var(--green)">1</span> && icmpv6.type == <span style="color:var(--green)">128</span>) {</div>
+        <div style="padding-left:14px;"><span style="color:var(--accent2)">if</span> (meter_color == <span style="color:var(--red)">RED</span>) → <span style="color:var(--red)">drop()</span></div>
+        <div>}</div>
+        <div>mac_forward.apply();</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">FuzzyPID Rate Controller</div>
+      <div style="margin-bottom:12px;">
+        <div class="controls" style="margin-bottom:10px;">
+          <button class="btn btn-primary" id="btnPID" onclick="togglePID()">▶ Start Simulation</button>
+          <span style="font-size:12px;color:var(--muted);">
+            <span class="status-dot gray" id="dotPID"></span>
+            <span id="pidStatus">Idle</span>
+          </span>
+        </div>
+        <canvas id="pidChart"></canvas>
+      </div>
+      <div class="grid-3" style="gap:10px;margin-top:10px;">
+        <div style="background:var(--bg);padding:10px;border-radius:6px;text-align:center;">
+          <div style="font-family:var(--mono);font-size:18px;color:var(--accent)" id="pidRate">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;">Rate (pps)</div>
+        </div>
+        <div style="background:var(--bg);padding:10px;border-radius:6px;text-align:center;">
+          <div style="font-family:var(--mono);font-size:18px;color:var(--yellow)" id="pidRTT">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;">RTT (ms)</div>
+        </div>
+        <div style="background:var(--bg);padding:10px;border-radius:6px;text-align:center;">
+          <div style="font-family:var(--mono);font-size:18px;color:var(--green)" id="pidLoss">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;">Loss %</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">FuzzyPID Live Log</div>
+    <div class="terminal" id="termPID" style="height:180px;">
+      <span class="log-dim">Fuzzy PID daemon log will appear here...</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  RESULTS TAB                                              -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div id="tab-results" class="panel">
+  <div class="grid-2 mb-16">
+    <div class="card">
+      <div class="card-title">Phase A — Clustering Results (Real Dataset)</div>
+      <table>
+        <thead>
+          <tr><th>Metric</th><th>Value</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Total addresses</td><td>49,999</td></tr>
+          <tr><td>Seed set (80%)</td><td>39,999</td></tr>
+          <tr><td>Validation set (20%)</td><td>10,000</td></tr>
+          <tr><td>Clusters discovered</td><td><span class="badge badge-blue">1,651</span></td></tr>
+          <tr><td>Patterns generated</td><td>1,651</td></tr>
+          <tr><td>Validation coverage</td><td><span class="badge badge-green">97.37%</span></td></tr>
+          <tr><td>n_prefix used</td><td>3 hextets</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Phase B — Discovery Results (Mininet)</div>
+      <table>
+        <thead>
+          <tr><th>Hosts</th><th>Active</th><th>Found</th><th>Hit%</th><th>FP%</th><th>Time(s)</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>50</td><td>34</td><td>34</td>
+            <td><span class="badge badge-green">100.0%</span></td>
+            <td><span class="badge badge-green">0.0%</span></td>
+            <td>6.3s</td>
+          </tr>
+          <tr>
+            <td>100</td><td>69</td><td>0</td>
+            <td><span class="badge badge-red">0.0%</span></td>
+            <td>—</td>
+            <td>19.3s</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:12px;padding:10px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:6px;font-size:12px;color:var(--yellow);">
+        ⚠ 100-host run hit NDP resolution issues — known limitation being addressed in next iteration.
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-16">
+    <div class="card-title">Sample Patterns from outputs/patterns.txt</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;margin-top:8px;max-height:200px;overflow-y:auto;">
+      <div id="patternList" style="display:contents;"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Key Findings & Next Steps</div>
+    <div class="grid-2" style="gap:16px;margin-top:8px;">
+      <div>
+        <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--green)">✓ Demonstrated</div>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);">
+          <li>→ Clustering learns IPv6 address structure from real data</li>
+          <li>→ 97.37% coverage proves algorithm generalizes well</li>
+          <li>→ P4 switch successfully meters ICMPv6 probe rate</li>
+          <li>→ FuzzyPID dynamically adjusts to RTT + loss feedback</li>
+          <li>→ 50-host discovery at 100% hit rate in 6.3 seconds</li>
+        </ul>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--yellow)">→ Next Steps</div>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);">
+          <li>→ Fix NDP resolution at 100+ host scale</li>
+          <li>→ Extend to n_prefix=4 for denser networks</li>
+          <li>→ Integrate target_generator.py with Phase B probing</li>
+          <li>→ Measure probing rate vs. discovery accuracy tradeoff</li>
+          <li>→ Compare with random scanning baseline</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- /.main -->
+
+<script>
+// ══════════════════════════════════════════
+// TAB SWITCHING
+// ══════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const names = ['overview','phaseA','phaseB','p4','results'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ══════════════════════════════════════════
+// RESULTS TAB — PATTERN LIST
+// ══════════════════════════════════════════
+const REAL_PATTERNS = [
+  "2001:1284:f514:*:*:*:*:*","2001:1284:f50e:*:*:*:*:*","2001:1388:0111:*:*:*:*:*",
+  "2001:1291:0000:*:*:*:*:*","2001:1248:447f:*:*:*:*:*","2001:1308:4000:*:*:*:*:*",
+  "2001:1248:9dbf:*:*:*:*:*","2001:1388:13a7:*:*:*:*:*","2001:12e0:0803:*:*:*:*:*",
+  "2001:12f0:0618:*:*:*:*:*","2001:12d0:4000:*:*:*:*:*","2001:1260:0217:*:*:*:*:*",
+  "2001:1308:8000:*:*:*:*:*","2001:12f0:0d88:*:*:*:*:*","2001:1291:1401:*:*:*:*:*",
+  "2001:1291:1002:*:*:*:*:*","2001:1248:3a7f:*:*:*:*:*","2001:12a0:4040:*:*:*:*:*",
+  "2001:1248:b0bd:*:*:*:*:*","2001:1260:0208:*:*:*:*:*","2001:1308:aeee:*:*:*:*:*",
+  "2001:1248:5dbf:*:*:*:*:*","2001:1388:0018:*:*:*:*:*","2001:1284:f508:*:*:*:*:*",
+  "2001:1248:44bf:*:*:*:*:*","2001:1388:16e0:*:*:*:*:*","2001:12ff:0001:*:*:*:*:*",
+  "2001:1248:b27f:*:*:*:*:*","2001:12e0:0800:*:*:*:*:*","2001:1308:1c8e:*:*:*:*:*",
+];
+
+(function populatePatterns() {
+  const el = document.getElementById('patternList');
+  REAL_PATTERNS.forEach(p => {
+    const d = document.createElement('div');
+    d.style.cssText = 'padding:5px 8px;background:#060a12;border:1px solid #1e2d45;border-radius:4px;font-family:var(--mono);font-size:11px;color:var(--accent);';
+    d.textContent = p;
+    el.appendChild(d);
+  });
+})();
+
+// ══════════════════════════════════════════
+// PHASE A SIMULATION
+// ══════════════════════════════════════════
+let phaseARunning = false;
+
+const PHASE_A_LOGS_3 = [
+  [0,   'info', 'Loading dataset: datasets/ipv6_50k.txt'],
+  [300, 'ok',   'Loaded 49,999 IPv6 addresses'],
+  [500, 'info', 'Splitting dataset (80/20)...'],
+  [700, 'ok',   'Seed set: 39,999 addresses'],
+  [800, 'ok',   'Validation set: 10,000 addresses'],
+  [1000,'info', 'Running cluster_addresses(seed_set, n_prefix=3)...'],
+  [1400,'info', 'Processing hextets... grouping by prefix tuple'],
+  [2000,'ok',   'Clustering complete → 1,651 unique clusters'],
+  [2200,'info', 'Largest cluster: 487 addresses'],
+  [2400,'info', 'Average cluster size: 24.2 addresses'],
+  [2600,'info', 'Generating wildcard patterns...'],
+  [2900,'ok',   'Generated 1,651 patterns'],
+  [3000,'info', 'Sample: 2001:1248:447f:*:*:*:*:*'],
+  [3100,'info', 'Sample: 2001:1388:0111:*:*:*:*:*'],
+  [3200,'info', 'Sample: 2001:12f0:0d88:*:*:*:*:*'],
+  [3400,'info', 'Running compute_coverage(cluster_keys, validation_set)...'],
+  [3800,'info', 'Checking 10,000 validation addresses against 1,651 cluster keys...'],
+  [4400,'ok',   '9,737 / 10,000 validation addresses covered'],
+  [4600,'ok',   'Coverage: 97.37% ✓'],
+  [4700,'info', 'Writing outputs/patterns.txt...'],
+  [4800,'ok',   'Done. All outputs saved.'],
+];
+
+const PHASE_A_LOGS_4 = [
+  [0,   'info', 'Loading dataset: datasets/mininet_ipv6.txt'],
+  [300, 'ok',   'Loaded 100 synthetic IPv6 addresses'],
+  [500, 'info', 'Splitting dataset (80/20)...'],
+  [700, 'ok',   'Seed set: 80 addresses'],
+  [800, 'ok',   'Validation set: 20 addresses'],
+  [1000,'info', 'Running cluster_addresses(seed_set, n_prefix=4)...'],
+  [1200,'info', 'Mininet addresses share hextets 0-2: 2001:0db8:0100'],
+  [1500,'ok',   'Clustering complete → 8 unique clusters'],
+  [1700,'info', 'Generating wildcard patterns...'],
+  [1900,'ok',   'Generated 8 patterns'],
+  [2000,'info', 'Sample: 2001:0db8:0100:1000:*:*:*:*'],
+  [2200,'info', 'Running compute_coverage(cluster_keys, validation_set)...'],
+  [2600,'ok',   '19 / 20 validation addresses covered'],
+  [2800,'ok',   'Coverage: 95.00% ✓'],
+  [2900,'ok',   'Done.'],
+];
+
+function runPhaseA() {
+  if (phaseARunning) return;
+  phaseARunning = true;
+  const nPrefix = +document.getElementById('nPrefix').value;
+  const logs = nPrefix === 3 ? PHASE_A_LOGS_3 : PHASE_A_LOGS_4;
+  const term = document.getElementById('termA');
+  const btn = document.getElementById('btnRunA');
+  const dot = document.getElementById('dotA');
+  const stat = document.getElementById('statusA');
+
+  btn.disabled = true;
+  dot.className = 'status-dot yellow';
+  stat.textContent = 'Running...';
+  term.innerHTML = `<span class="log-dim">$ python3 scripts/main.py --n-prefix ${nPrefix}</span><br>`;
+
+  const PIPE_STEPS = [
+    { step:0, val: nPrefix===3 ? '49,999 addrs' : '100 addrs' },
+    { step:1, val: nPrefix===3 ? '40k / 10k' : '80 / 20' },
+    { step:2, val: nPrefix===3 ? '1,651 clusters' : '8 clusters' },
+    { step:3, val: nPrefix===3 ? '1,651 patterns' : '8 patterns' },
+    { step:4, val: nPrefix===3 ? '97.37%' : '95.00%' },
+  ];
+  const pipeTimings = [300,700,2000,2600,4600];
+
+  pipeTimings.forEach((t,i) => {
+    setTimeout(() => {
+      document.getElementById('pipe'+i).classList.add('running');
+      setTimeout(() => {
+        document.getElementById('pipe'+i).classList.remove('running');
+        document.getElementById('pipe'+i).classList.add('done');
+        document.getElementById('pv'+i).textContent = PIPE_STEPS[i].val;
+      }, 600);
+    }, t);
+  });
+
+  logs.forEach(([delay, type, msg]) => {
+    setTimeout(() => {
+      const ts = new Date().toLocaleTimeString('en-US',{hour12:false});
+      const cls = {info:'log-info',ok:'log-ok',warn:'log-warn',err:'log-err'}[type] || 'log-dim';
+      term.innerHTML += `<span class="log-ts">[${ts}]</span> <span class="${cls}">${msg}</span><br>`;
+      term.scrollTop = term.scrollHeight;
+    }, delay);
+  });
+
+  // Cluster viz
+  setTimeout(() => {
+    const viz = document.getElementById('clusterViz');
+    if (nPrefix === 3) {
+      const sizes = Array.from({length:80},()=>Math.floor(Math.random()*60)+5);
+      viz.innerHTML = '<div class="cluster-strip" id="cstrip"></div>';
+      const strip = document.getElementById('cstrip');
+      sizes.forEach(s => {
+        const pill = document.createElement('div');
+        pill.className = 'cluster-pill';
+        pill.style.width = Math.max(8,s/4)+'px';
+        pill.title = `${s} addresses`;
+        strip.appendChild(pill);
+      });
+      document.getElementById('cs-total').textContent  = '1,651';
+      document.getElementById('cs-largest').textContent = '487';
+      document.getElementById('cs-avg').textContent    = '24.2';
+      document.getElementById('cs-cov').textContent    = '97.37%';
+    } else {
+      viz.innerHTML = '<div style="display:flex;gap:8px;margin-top:8px;">' +
+        Array.from({length:8},(_,i)=>`<div style="background:var(--accent2);border-radius:4px;width:40px;height:${20+Math.random()*30}px;opacity:0.8;"></div>`).join('') +
+        '</div>';
+      document.getElementById('cs-total').textContent  = '8';
+      document.getElementById('cs-largest').textContent = '12';
+      document.getElementById('cs-avg').textContent    = '10.0';
+      document.getElementById('cs-cov').textContent    = '95.00%';
+    }
+  }, 2000);
+
+  // Sample patterns
+  setTimeout(() => {
+    const el = document.getElementById('patternSamples');
+    const samples = nPrefix === 3
+      ? REAL_PATTERNS.slice(0,12)
+      : ['2001:0db8:0100:1000:*:*:*:*','2001:0db8:0100:2000:*:*:*:*','2001:0db8:0100:3000:*:*:*:*','2001:0db8:0100:4000:*:*:*:*'];
+    el.innerHTML = '';
+    samples.forEach(p => {
+      const d = document.createElement('div');
+      d.style.cssText = 'padding:4px 10px;background:#060a12;border:1px solid var(--accent2);border-radius:4px;font-family:var(--mono);font-size:11px;color:var(--accent);';
+      d.textContent = p;
+      el.appendChild(d);
+    });
+  }, 2900);
+
+  const totalTime = logs[logs.length-1][0] + 400;
+  setTimeout(() => {
+    dot.className = 'status-dot green';
+    stat.textContent = 'Complete';
+    btn.disabled = false;
+    phaseARunning = false;
+  }, totalTime);
+}
+
+function resetPhaseA() {
+  if (phaseARunning) return;
+  document.getElementById('termA').innerHTML = '<span class="log-dim">$ python3 scripts/main.py</span><br><span class="log-dim">Waiting to run...</span>';
+  for(let i=0;i<5;i++) {
+    const s = document.getElementById('pipe'+i);
+    s.classList.remove('done','running');
+    document.getElementById('pv'+i).textContent = '—';
+  }
+  document.getElementById('clusterViz').innerHTML = '<span style="font-size:12px;color:var(--muted);">Run Phase A to see cluster visualization</span>';
+  ['cs-total','cs-largest','cs-avg','cs-cov'].forEach(id => document.getElementById(id).textContent='—');
+  document.getElementById('patternSamples').innerHTML = '<span style="font-size:12px;color:var(--muted);">Patterns will appear here after run</span>';
+  document.getElementById('dotA').className = 'status-dot gray';
+  document.getElementById('statusA').textContent = 'Ready';
+}
+
+// ══════════════════════════════════════════
+// PHASE B SIMULATION
+// ══════════════════════════════════════════
+let phaseBRunning = false;
+let phaseBTimer = null;
+
+function buildHostGrid(n, activeSet) {
+  const grid = document.getElementById('hostGrid');
+  grid.innerHTML = '';
+  for(let i=1; i<=n; i++){
+    const d = document.createElement('div');
+    d.className = 'host-dot tooltip-wrap';
+    d.id = 'h'+i;
+    d.innerHTML = `<span class="tooltip-text">h${i} · ${i===1?'prober':'2001:db8:1::'+i}</span>${i}`;
+    if(i===1) { d.classList.add('prober'); }
+    else if(!activeSet.has(i)) { d.classList.add('inactive'); }
+    grid.appendChild(d);
+  }
+  document.getElementById('hostGridLabel').textContent = `${n} hosts · ${activeSet.size-1} active targets`;
+}
+
+function runPhaseB() {
+  if (phaseBRunning) return;
+  phaseBRunning = true;
+
+  const n = +document.getElementById('hostCount').value;
+  const ratio = +document.getElementById('activeRatio').value;
+  const btn = document.getElementById('btnRunB');
+  const dot = document.getElementById('dotB');
+
+  btn.disabled = true;
+  dot.className = 'status-dot yellow';
+  document.getElementById('statusB').textContent = 'Running...';
+
+  // Decide which hosts are active
+  const activeSet = new Set([1]);
+  const targets = Array.from({length:n-1},(_,i)=>i+2);
+  const numActive = Math.max(1, Math.round((n-1)*ratio));
+  const shuffled = targets.sort(()=>Math.random()-0.5);
+  shuffled.slice(0,numActive).forEach(h=>activeSet.add(h));
+
+  buildHostGrid(n, activeSet);
+
+  const term = document.getElementById('termB');
+  term.innerHTML = `<span class="log-dim">$ python3 scripts/evaluate_6map.py --hosts ${n} --active-ratio ${ratio}</span><br>`;
+
+  // Simulate probing each host
+  const probingOrder = shuffled.slice(); // random order
+  let probed = 0;
+  let found = 0;
+  const startTime = Date.now();
+
+  function logLine(type, msg) {
+    const ts = new Date().toLocaleTimeString('en-US',{hour12:false});
+    const cls = {info:'log-info',ok:'log-ok',warn:'log-warn',err:'log-err',pid:'log-pid',dim:'log-dim'}[type];
+    term.innerHTML += `<span class="log-ts">[${ts}]</span> <span class="${cls}">${msg}</span><br>`;
+    term.scrollTop = term.scrollHeight;
+  }
+
+  logLine('info', `Initializing Mininet network (${n} hosts)...`);
+  setTimeout(()=>logLine('ok','Network started — BMv2 switch running'), 600);
+  setTimeout(()=>logLine('info','Static neighbor entries populated'), 1000);
+  setTimeout(()=>logLine('ok','P4 table entries loaded'), 1200);
+  setTimeout(()=>logLine('pid','[FuzzyPID] Daemon started — initial rate: 100 pps'), 1400);
+  setTimeout(()=>logLine('info',`Starting probe: ${n-1} targets`), 1600);
+
+  const delayPerHost = Math.max(60, 3000 / n);
+
+  probingOrder.forEach((hostNum, idx) => {
+    setTimeout(() => {
+      const el = document.getElementById('h'+hostNum);
+      if(el) el.classList.add('scanning');
+
+      setTimeout(() => {
+        probed++;
+        const isActive = activeSet.has(hostNum);
+        if(el) {
+          el.classList.remove('scanning');
+          el.classList.toggle('active', isActive);
+        }
+        if(isActive) {
+          found++;
+          logLine('ok', `✓ 2001:db8:1::${hostNum} → replied`);
+        }
+        const pct = (probed/(n-1)*100).toFixed(0);
+        document.getElementById('progressB').style.width = pct+'%';
+        document.getElementById('progLabel').textContent = `${probed} / ${n-1} probed`;
+        document.getElementById('timeLabel').textContent = ((Date.now()-startTime)/1000).toFixed(1)+'s elapsed';
+
+        if(probed === n-1) finish();
+      }, delayPerHost * 0.7);
+    }, 1800 + idx * delayPerHost);
+  });
+
+  function finish() {
+    const elapsed = ((Date.now()-startTime)/1000).toFixed(1);
+    const hitRate = (found/(activeSet.size-1)*100).toFixed(1);
+    logLine('ok', `--- Discovery complete ---`);
+    logLine('info', `Found: ${found} / ${activeSet.size-1} active hosts`);
+    logLine('ok', `Hit rate: ${hitRate}%  |  Time: ${elapsed}s`);
+    logLine('pid', `[FuzzyPID] Final rate: ${(80+Math.random()*120).toFixed(0)} pps`);
+
+    document.getElementById('bFound').textContent = found;
+    document.getElementById('bHit').textContent = hitRate+'%';
+    document.getElementById('bFP').textContent = '0';
+    document.getElementById('bTime').textContent = elapsed+'s';
+
+    dot.className = 'status-dot green';
+    document.getElementById('statusB').textContent = 'Complete';
+    btn.disabled = false;
+    phaseBRunning = false;
+  }
+}
+
+function resetPhaseB() {
+  if(phaseBRunning) return;
+  document.getElementById('hostGrid').innerHTML = '';
+  document.getElementById('hostGridLabel').textContent = 'Configure and run';
+  document.getElementById('termB').innerHTML = '<span class="log-dim">$ python3 scripts/evaluate_6map.py --hosts 50</span><br><span class="log-dim">Waiting to run...</span>';
+  document.getElementById('progressB').style.width = '0%';
+  document.getElementById('progLabel').textContent = '0 / 0 probed';
+  document.getElementById('timeLabel').textContent = '—';
+  ['bFound','bHit','bFP','bTime'].forEach(id=>document.getElementById(id).textContent='—');
+  document.getElementById('dotB').className = 'status-dot gray';
+  document.getElementById('statusB').textContent = 'Ready';
+}
+
+// ══════════════════════════════════════════
+// FUZZY PID CHART + SIMULATION
+// ══════════════════════════════════════════
+let pidInterval = null;
+let pidRunning = false;
+const pidData = { rate:[], rtt:[], time:[] };
+const MAX_PTS = 50;
+
+const PID_LOG_TEMPLATES = [
+  (r,rtt,loss,adj) =>
+    `Rate: ${r.toFixed(1)} pps | RTT Min: ${(rtt*0.6).toFixed(2)} ms | Budget: ${(1+Math.random()).toFixed(2)} ms | Target RTT: ${(rtt*0.9).toFixed(2)} ms | Meas RTT: ${rtt.toFixed(2)} ms | Loss: ${loss.toFixed(1)}% | Adjust: ${adj>0?'+':''}${adj.toFixed(2)}`
+];
+
+function togglePID() {
+  if(pidRunning) {
+    clearInterval(pidInterval);
+    pidRunning = false;
+    document.getElementById('btnPID').textContent = '▶ Start Simulation';
+    document.getElementById('dotPID').className = 'status-dot gray';
+    document.getElementById('pidStatus').textContent = 'Paused';
+  } else {
+    pidRunning = true;
+    document.getElementById('btnPID').textContent = '⏹ Stop';
+    document.getElementById('dotPID').className = 'status-dot yellow';
+    document.getElementById('pidStatus').textContent = 'Running';
+    let t = 0;
+    let rate = 100;
+    pidInterval = setInterval(() => {
+      t += 0.5;
+      // Simulate realistic PID behavior
+      const targetRTT = 7.0;
+      const congestion = rate > 200 ? 1.5 : 0;
+      const rtt = 3 + congestion + Math.sin(t*0.3)*1.5 + Math.random()*0.8;
+      const err = targetRTT - rtt;
+      const adj = err * 8 + (Math.random()-0.5)*4;
+      rate = Math.max(10, Math.min(500, rate + adj));
+      const loss = rate > 250 ? (rate-250)*0.05 : 0;
+
+      pidData.rate.push(rate);
+      pidData.rtt.push(rtt);
+      pidData.time.push(t);
+      if(pidData.rate.length > MAX_PTS) {
+        pidData.rate.shift(); pidData.rtt.shift(); pidData.time.shift();
+      }
+
+      drawPIDChart();
+      document.getElementById('pidRate').textContent = rate.toFixed(0);
+      document.getElementById('pidRTT').textContent  = rtt.toFixed(2);
+      document.getElementById('pidLoss').textContent = loss.toFixed(1)+'%';
+
+      const termPID = document.getElementById('termPID');
+      const ts = new Date().toLocaleTimeString('en-US',{hour12:false});
+      termPID.innerHTML += `<span class="log-ts">[${ts}]</span> <span class="log-pid">[PID] ${PID_LOG_TEMPLATES[0](rate,rtt,loss,adj)}</span><br>`;
+      termPID.scrollTop = termPID.scrollHeight;
+    }, 500);
+  }
+}
+
+function drawPIDChart() {
+  const canvas = document.getElementById('pidChart');
+  const dpr = window.devicePixelRatio||1;
+  const W = canvas.clientWidth||600, H = canvas.clientHeight||140;
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,W,H);
+
+  if(pidData.rate.length < 2) return;
+
+  const maxRate = Math.max(...pidData.rate, 200);
+  const maxRTT  = Math.max(...pidData.rtt, 15);
+  const n = pidData.rate.length;
+
+  // Grid
+  ctx.strokeStyle = '#1e2d45'; ctx.lineWidth = 0.5;
+  for(let y=0; y<=4; y++){
+    const py = (y/4)*H;
+    ctx.beginPath(); ctx.moveTo(0,py); ctx.lineTo(W,py); ctx.stroke();
+  }
+
+  // Rate line
+  ctx.beginPath(); ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 1.5;
+  pidData.rate.forEach((v,i) => {
+    const x = (i/(n-1))*W, y = H-(v/maxRate)*H*0.9;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // RTT line (scaled)
+  ctx.beginPath(); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.5;
+  pidData.rtt.forEach((v,i) => {
+    const x = (i/(n-1))*W, y = H-(v/maxRTT)*H*0.9;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // Labels
+  ctx.font = `10px JetBrains Mono, monospace`;
+  ctx.fillStyle = '#00d4ff'; ctx.fillText('Rate (pps)', 6, 14);
+  ctx.fillStyle = '#f59e0b'; ctx.fillText('RTT (ms)', 90, 14);
+}
+
+// Init empty chart on load
+window.addEventListener('load', () => {
+  setTimeout(drawPIDChart, 100);
+  // Build initial host grid placeholder
+  buildHostGrid(50, new Set([1].concat(Array.from({length:34},(_,i)=>i+2))));
+});
+</script>
+</body>
+</html>
