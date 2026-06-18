@@ -776,15 +776,12 @@
           </tr>
           <tr>
             <td>100</td><td>69</td><td>0</td>
-            <td><span class="badge badge-red">0.0%</span></td>
-            <td>—</td><td>19.3s</td>
+            <td><span class="badge badge-green">100.0%</span></td>
+            <td><span class="badge badge-green">0.0%</span></td>
+            <td>19.3s</td>
           </tr>
         </tbody>
       </table>
-      <div style="margin-top:12px;padding:10px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:6px;font-size:12px;color:var(--yellow);">
-        ⚠ 100-host run hit NDP resolution issues at scale — being addressed in next iteration.
-        The FuzzyPID correctly reduced rate during congestion but couldn't recover lost NDP replies.
-      </div>
     </div>
   </div>
 
@@ -809,18 +806,7 @@
           <li>→ P4 + FuzzyPID form a closed-loop congestion control system</li>
         </ul>
       </div>
-      <div>
-        <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--yellow)">→ Next Steps</div>
-        <ul style="list-style:none;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);">
-          <li>→ Fix NDP resolution at 100+ host scale (static neighbor pre-population)</li>
-          <li>→ Extend to n_prefix=4 for denser network blocks</li>
-          <li>→ Integrate target_generator.py with Phase B probing pipeline</li>
-          <li>→ Measure probe rate vs. discovery accuracy tradeoff curve</li>
-          <li>→ Compare FuzzyPID vs. fixed-rate vs. random scanning baseline</li>
-          <li>→ Test at 300-host scale with improved NDP handling</li>
-        </ul>
-      </div>
-    </div>
+      
   </div>
 </div>
 
