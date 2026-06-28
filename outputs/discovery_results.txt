@@ -1,6 +1,32 @@
-Scale Experiment Results
-======================================================================
-   Hosts    Active     Found      Hit%     Prec%     FP%   Time(s)
-──────────────────────────────────────────────────────────────────────
-      50        34        34    100.0%    100.0%    0.0%       6.3
-     100        69         0      0.0%      0.0%    0.0%      19.3
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     100      69      69   100.0%   100.0%   0.0%      15.6
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     200     139     139   100.0%   100.0%   0.0%      30.8
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     500     349     349   100.0%   100.0%   0.0%      77.9
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     300     209     209   100.0%   100.0%   0.0%      46.2
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+    1000     699       0     0.0%     0.0%   0.0%     153.4
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     700     488       0     0.0%     0.0%   0.0%     107.4
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     600     419       0     0.0%     0.0%   0.0%      92.3
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     500     349     349   100.0%   100.0%   0.0%      76.9
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     550     384       0     0.0%     0.0%   0.0%      85.3
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     530     370       0     0.0%     0.0%   0.0%      82.2
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     510     356       0     0.0%     0.0%   0.0%      79.2
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     501     349     349   100.0%   100.0%   0.0%      76.3
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     505     352     352   100.0%   100.0%   0.0%      80.2
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     508     354       0     0.0%     0.0%   0.0%      80.4
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     506     353     353   100.0%   100.0%   0.0%      79.6
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     507     353     353   100.0%   100.0%   0.0%      77.7

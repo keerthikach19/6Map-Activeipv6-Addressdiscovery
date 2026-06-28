@@ -295,6 +295,22 @@ if __name__ == "__main__":
         print(f"Time Elapsed         : {elapsed:.2f} s")
         print(f"Average Probing Rate : {len(target_addrs)/elapsed:.1f} pps")
         print("=" * 60)
+        # Save results to file
+        os.makedirs("outputs", exist_ok=True)
+        with open("outputs/discovery_results.txt", "a") as f:
+            f.write(f"{'Hosts':>8}  {'Active':>6}  {'Found':>6}  {'Hit%':>7}  {'Prec%':>7}  {'FP%':>5}  {'Time(s)':>8}\n")
+            prec = len(true_positives) / len(discovered) * 100 if discovered else 0
+            fp_pct = len(false_positives) / len(discovered) * 100 if discovered else 0
+            f.write(
+                f"{args.hosts:>8}  "
+                f"{len(ground_truth):>6}  "
+                f"{len(true_positives):>6}  "
+                f"{hit_rate:>6.1f}%  "
+                f"{prec:>6.1f}%  "
+                f"{fp_pct:>4.1f}%  "
+                f"{float(elapsed):>8.1f}\n"
+            )
+        print(f"\nResults saved to outputs/discovery_results.txt")
         
     finally:
         if fuzzy_daemon:
