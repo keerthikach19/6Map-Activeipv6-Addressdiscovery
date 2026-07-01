@@ -30,3 +30,7 @@
      506     353     353   100.0%   100.0%   0.0%      79.6
    Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
      507     353     353   100.0%   100.0%   0.0%      77.7
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     300     209     209   100.0%   100.0%   0.0%      46.0
+   Hosts  Active   Found     Hit%    Prec%    FP%   Time(s)
+     300     209     209   100.0%   100.0%   0.0%      47.1
