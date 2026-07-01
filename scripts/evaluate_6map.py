@@ -35,55 +35,57 @@ class FuzzyPIDDaemon(threading.Thread):
         self.daemon = True
         self.running = True
         self.current_rate = 100.0  # start at 100 pps
-        
+
         # Initialize FuzzyPID with base gains
         self.controller = FuzzyPID(kp_init=1.0, ki_init=0.1, kd_init=0.05)
-        
+
         # Thread safety lock
         self.lock = threading.Lock()
         # List to store tuples of (rtt_ms, success) from monitor
         self.rtt_samples = []
-        
+
         # Dynamic RTT & Congestion variables
         self.rtt_history = []               # sliding window of successful RTTs
         self.rtt_min = None                 # baseline propagation delay
         self.queue_delay_budget = 2.0       # dynamic queue delay budget in ms
-        self.min_budget = 0.5               # minimum allowed budget
+        self.min_budget = 1.0               # minimum allowed budget
         self.max_budget = 20.0              # maximum allowed budget
         self.target_rtt = target_rtt_ms     # current setpoint, starts with default
         self.measured_rtt = 0.0             # current smoothed RTT
         self.loss_rate = 0.0
         self.jitter = 0.0
+        self.tick_count = 0                 # warm-up counter
 
     def run(self):
         last_time = time.time()
         while self.running:
             time.sleep(0.5)  # control loop interval
-            
+
             now = time.time()
             dt = now - last_time
             last_time = now
-            
+            self.tick_count += 1
+
             # 1. Thread-safely extract and clear accumulated samples
             with self.lock:
                 samples = list(self.rtt_samples)
                 self.rtt_samples.clear()
-                
+
             if samples:
                 # Filter successful ping RTTs and failures
                 successful_rtts = [r for r, success in samples if success]
                 num_failures = sum(1 for r, success in samples if not success)
                 total_samples = len(samples)
-                
+
                 # Compute loss rate
                 self.loss_rate = num_failures / total_samples
-                
+
                 # Update history with successful measurements
                 if successful_rtts:
                     self.rtt_history.extend(successful_rtts)
                     self.rtt_history = self.rtt_history[-30:] # keep last 30 samples
                     self.rtt_min = min(self.rtt_history)
-                    
+
                     # Compute smoothed measured RTT (exponential moving average or simple average of current step)
                     step_avg_rtt = sum(successful_rtts) / len(successful_rtts)
                     if self.measured_rtt == 0.0:
@@ -91,13 +93,13 @@ class FuzzyPIDDaemon(threading.Thread):
                     else:
                         # EMA with alpha = 0.3 to reduce measurement noise
                         self.measured_rtt = 0.3 * step_avg_rtt + 0.7 * self.measured_rtt
-                        
+
                     # Compute jitter (mean absolute difference between consecutive samples in history)
                     if len(self.rtt_history) > 1:
                         self.jitter = sum(abs(self.rtt_history[i] - self.rtt_history[i-1]) for i in range(1, len(self.rtt_history))) / (len(self.rtt_history) - 1)
                     else:
                         self.jitter = 0.0
-                
+
                 # If there are no successful RTTs (all pings failed), we treat it as 100% loss
                 # and assign a penalty measured RTT to force rate reduction
                 if not successful_rtts:
@@ -108,35 +110,38 @@ class FuzzyPIDDaemon(threading.Thread):
                 pass
 
             # 2. Dynamic budget and setpoint adjustment
-            if self.rtt_min is not None:
-                # Determine congestion based on:
-                # - loss_rate > 0 (direct drop)
-                # - jitter > 0.5 * queue_delay_budget (unstable queue)
-                # - queuing delay (measured_rtt - rtt_min) exceeds budget
+            # ── FIXED congestion detection ────────────────────────────────────
+            # - require loss_rate > 0.25 (not > 0.0) so a single noisy dropped
+            #   ping from the RTT monitor doesn't trip a false congestion event
+            # - dropped the raw jitter check, which was also too sensitive
+            # - budget recovers by +1.0/tick instead of +0.2, so it climbs back
+            #   up roughly as fast as it gets cut down (closer to symmetric)
+            # - skip the first few ticks (warm-up) so the ARP/startup RTT
+            #   spike doesn't poison rtt_min before the network settles
+            if self.rtt_min is not None and self.tick_count > 3:
                 current_queue_delay = max(0.0, self.measured_rtt - self.rtt_min)
-                
-                is_congested = (self.loss_rate > 0.0 or 
-                                self.jitter > (0.5 * self.queue_delay_budget) or 
+
+                is_congested = (self.loss_rate > 0.25 or
                                 current_queue_delay > self.queue_delay_budget)
-                
+
                 if is_congested:
                     # Multiplicative decrease of budget
-                    backoff_factor = 0.5 if self.loss_rate > 0.3 else 0.8
+                    backoff_factor = 0.7 if self.loss_rate > 0.5 else 0.85
                     self.queue_delay_budget = max(self.min_budget, self.queue_delay_budget * backoff_factor)
                 else:
                     # Additive increase of budget when healthy
-                    self.queue_delay_budget = min(self.max_budget, self.queue_delay_budget + 0.2)
-                
+                    self.queue_delay_budget = min(self.max_budget, self.queue_delay_budget + 1.0)
+
                 self.target_rtt = self.rtt_min + self.queue_delay_budget
             else:
-                # Fallback if no minimum RTT is recorded yet
+                # Fallback if no minimum RTT is recorded yet, or still warming up
                 pass
 
-            # 3. Fuzzy controller calculates the needed adjustment 
+            # 3. Fuzzy controller calculates the needed adjustment
             adjustment = self.controller.compute(self.target_rtt, self.measured_rtt, dt)
-            
+
             self.current_rate = max(10.0, min(1000.0, self.current_rate + adjustment))
-            
+
             # Print status to stdout for real-time visibility
             print(f"[PID Daemon] Rate: {self.current_rate:6.1f} pps | "
                   f"RTT Min: {f'{self.rtt_min:.2f}' if self.rtt_min is not None else 'N/A'} ms | "
@@ -146,7 +151,7 @@ class FuzzyPIDDaemon(threading.Thread):
                   f"Loss: {self.loss_rate * 100:5.1f}% | "
                   f"Jitter: {self.jitter:.2f} ms | "
                   f"Adjust: {adjustment:+.2f}")
-            
+
             # Update the P4 switch meter
             set_switch_meter_rate(self.current_rate)
 
@@ -160,18 +165,18 @@ class FuzzyPIDDaemon(threading.Thread):
 def run_prober(h1, h2, target_addrs, fuzzy_daemon):
     """
     Runs parallel pings from h1.
-    While running, periodically updates fuzzy_daemon.measured_rtt based on 
+    While running, periodically updates fuzzy_daemon.measured_rtt based on
     a sample ping, so the control plane can adjust the P4 switch rate.
     """
     total = len(target_addrs)
     batch_size = 20
     timeout = 3
-    
+
     print(f"\n--- Starting 6Map Prober ---")
     print(f"Target count : {total}")
     print(f"Batch size   : {batch_size}")
     print(f"Max Timeout  : {timeout}s")
-    
+
     # 1. Write targets to file
     targets_file = f"/tmp/6map_targets_{h1.name}.txt"
     results_file = f"/tmp/6map_results_{h1.name}.txt"
@@ -217,7 +222,7 @@ wait
     start_time = time.time()
     h1.cmd(f"bash {script_file}")
     elapsed = time.time() - start_time
-    
+
     # 5. Stop monitor
     monitor_running = False
     monitor_thread.join()
@@ -256,7 +261,7 @@ if __name__ == "__main__":
         net, hosts, active_addrs = create_p4_network(num_hosts=args.hosts, active_ratio=args.active_ratio)
         h1 = hosts[0]
         h2 = hosts[1]
-        
+
         # Start the Fuzzy PID Control Plane ONLY AFTER network is ready
         fuzzy_daemon = FuzzyPIDDaemon(target_rtt_ms=args.target_rtt)
         fuzzy_daemon.start()
@@ -264,17 +269,17 @@ if __name__ == "__main__":
         # We probe everyone except ourselves
         target_addrs = [f"2001:db8:1::{i}" for i in range(2, args.hosts + 1)]
         ground_truth = set(active_addrs) - {h1.ipv6}
-        
+
         # Run prober
         discovered, elapsed = run_prober(h1, h2, target_addrs, fuzzy_daemon)
-        
+
         # Calculate Metrics
         true_positives = discovered.intersection(ground_truth)
         false_positives = discovered - ground_truth
         false_negatives = ground_truth - discovered
-        
+
         hit_rate = len(true_positives) / len(ground_truth) * 100 if ground_truth else 0
-        
+
         print("\n--- Target Discovery Status ---")
         for addr in target_addrs:
             is_active = addr in discovered
@@ -311,7 +316,7 @@ if __name__ == "__main__":
                 f"{float(elapsed):>8.1f}\n"
             )
         print(f"\nResults saved to outputs/discovery_results.txt")
-        
+
     finally:
         if fuzzy_daemon:
             fuzzy_daemon.stop()

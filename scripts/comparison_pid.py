@@ -84,13 +84,14 @@ wait
     os.chmod(script_file, 0o755)
 
     # ── PID controller (only used when use_fuzzy_pid=True) ───────────────────
-    pid_ctrl    = FuzzyPID(kp_init=1.0, ki_init=0.1, kd_init=0.05)
+    pid_ctrl     = FuzzyPID(kp_init=1.0, ki_init=0.1, kd_init=0.05)
     current_rate = fixed_rate_pps
     rtt_history  = []
     rtt_min      = None
     budget       = 2.0
     measured_rtt = 0.0
     loss_rate    = 0.0
+    tick_count   = 0            # ← NEW: warm-up counter
     trace        = []          # [{t, rate, rtt, loss}]
     lock         = threading.Lock()
     rtt_samples  = []
@@ -114,13 +115,17 @@ wait
     # ── Control loop thread (only meaningful when use_fuzzy_pid=True) ─────────
     ctrl_running = True
     def control_loop():
-        nonlocal current_rate, measured_rtt, loss_rate, rtt_min, budget
+        # NOTE: every variable from the outer scope that gets REASSIGNED
+        # inside this function must be listed here, including tick_count.
+        # This is what was missing before and caused the UnboundLocalError.
+        nonlocal current_rate, measured_rtt, loss_rate, rtt_min, budget, tick_count
         last_t = time.time()
         while ctrl_running:
             time.sleep(0.5)
             now = time.time()
             dt  = now - last_t
             last_t = now
+            tick_count += 1
 
             with lock:
                 samples = list(rtt_samples)
@@ -142,14 +147,20 @@ wait
                 else:
                     measured_rtt = target_rtt_ms + 15.0
 
-            if use_fuzzy_pid and rtt_min is not None:
+            # ── FIXED congestion detection ────────────────────────────────────
+            # - require loss_rate > 0.25 (not > 0) so one noisy dropped ping
+            #   doesn't trip a false congestion event
+            # - budget recovers by +1.0/tick instead of +0.2, so it climbs
+            #   back up roughly as fast as it can be cut down
+            # - skip the first few ticks (warm-up) so ARP/startup RTT spikes
+            #   don't poison rtt_min before the network has settled
+            if use_fuzzy_pid and rtt_min is not None and tick_count > 3:
                 q_delay = max(0.0, measured_rtt - rtt_min)
-                congested = (loss_rate > 0 or
-                             q_delay > budget)
+                congested = (loss_rate > 0.25 or q_delay > budget)
                 if congested:
-                    budget = max(0.5, budget * (0.5 if loss_rate > 0.3 else 0.8))
+                    budget = max(1.0, budget * (0.7 if loss_rate > 0.5 else 0.85))
                 else:
-                    budget = min(20.0, budget + 0.2)
+                    budget = min(20.0, budget + 1.0)
                 t_rtt = rtt_min + budget
                 adj   = pid_ctrl.compute(t_rtt, measured_rtt, dt)
                 current_rate = max(10.0, min(500.0, current_rate + adj))
